@@ -23,7 +23,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import java.io.File
 import java.net.URL
@@ -186,15 +189,16 @@ This channel will be hidden from all lists. Long-press lists to manage.""")
         val headers = HashMap<String, String>()
         headers["User-Agent"] = ch.userAgent ?: defaultUa
         ch.referer?.let { headers["Referer"] = it }
-        val item = MediaItem.Builder()
-            .setUri(ch.url)
-            .setRequestConfiguration(
-                MediaItem.RequestConfiguration.Builder()
-                    .setHttpRequestHeaders(headers)
-                    .build()
-            )
-            .build()
-        player.setMediaItem(item)
+        // Media3 applies per-channel HTTP headers through the DataSource factory,
+        // not through MediaItem.Builder.
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setDefaultRequestProperties(headers)
+        val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(this)
+            .setDataSourceFactory(dataSourceFactory)
+
+        val mediaSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(ch.url))
+        player.setMediaSource(mediaSource)
         player.prepare()
         player.playWhenReady = true
     }
@@ -307,7 +311,7 @@ This channel will be hidden from all lists. Long-press lists to manage.""")
     private val idRegex = Regex("tvg-id=\"([^\"]*)\"")
     private val uaAttrRegex = Regex("http-user-agent=\"([^\"]*)\"")
     private val refAttrRegex = Regex("http-referrer=\"([^\"]*)\"")
-    private val countryRegex = Regex("\.([a-z]{2})(?:@|$)")
+    private val countryRegex = Regex("""\.([a-z]{2})(?:@|$)""")
 
     private fun parseM3u(text: String): List<Channel> {
         val out = ArrayList<Channel>()
